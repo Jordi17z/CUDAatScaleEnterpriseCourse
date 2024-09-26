@@ -126,9 +126,11 @@ int main(int argc, char *argv[])
 {
   printf("%s Starting...\n\n", argv[0]);
 
-  std::string s_filename = "input_image.pgm";
-  std::string s_result_filename = "output_image.pgm";
+  std::string s_filename = "Lena.pgm";
+  std::string s_result_filename = "./data/output/output_image.pgm";
   std::string filter_type = "b";
+  char *file_path;
+
 
   // Parse command line arguments
   for (int i = 1; i < argc; ++i)
@@ -146,6 +148,26 @@ int main(int argc, char *argv[])
       filter_type = argv[++i]; // Set filter type
     }
   }
+
+  if (checkCmdLineFlag(argc, (const char **)argv, "input"))
+  {
+    getCmdLineArgumentString(argc, (const char **)argv, "input", &file_path);
+  }
+  else
+  {
+    file_path = sdkFindFilePath("Lena.pgm", argv[0]);
+  }
+
+  if (file_path)
+  {
+    s_filename = file_path;
+  }
+  else
+  {
+    s_filename = "Lena.pgm";
+  }
+
+  printf("%s\n", s_filename);
 
   try{
 
