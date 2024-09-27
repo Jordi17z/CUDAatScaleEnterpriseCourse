@@ -32,21 +32,20 @@
 #pragma warning(disable : 4819)
 #endif
 
+#include <iostream>
+#include <fstream>
+#include <string.h>
+
+#include <cuda_runtime.h>
+#include <npp.h>
+#include <helper_cuda.h>
+#include <helper_string.h>
+
 #include <Exceptions.h>
 #include <ImageIO.h>
 #include <ImagesCPU.h>
 #include <ImagesNPP.h>
-#include <nppi.h>
 
-#include <string.h>
-#include <fstream>
-#include <iostream>
-
-#include <cuda_runtime.h>
-#include <npp.h>
-
-#include <helper_cuda.h>
-#include <helper_string.h>
 
 const char *kFilterTypeDefault = "gaussian";
 
@@ -83,36 +82,44 @@ void SetupImageProcessing(const std::string & s_filename, npp::ImageCPU_8u_C1 &o
   o_device_dst = npp::ImageNPP_8u_C1(o_size_ROI.width, o_size_ROI.height);
 }
 
-
+/*
+  @Brief Apply a Gaussian filter to a single-channel (grayscale) image in the GPU
+  ( https://docs.nvidia.com/cuda/archive/10.0/npp/group__image__filter__gauss.html#ga00e18b1995c2b1d7fa8e5a526a4cb1ff )
+*/
 void ApplyGaussianFilter(const npp::ImageNPP_8u_C1 & o_device_src, npp::ImageNPP_8u_C1 & o_device_dst)
 {
-
+  // We define the size of image interest (based on the width and height of source image)
   NppiSize o_size_ROI = {(int)(o_device_src.width()), (int)(o_device_src.height())};
 
-  NppiSize o_mask = {5, 5};
-  NppiMaskSize e_mask_size(NPP_MASK_SIZE_5_X_5);
+  const int kMaskWidth = 5;
+  const int kMaskHeight = 5;
+  NppiSize o_mask = {kMaskWidth, kMaskHeight};              // Define the size of the mask, a kernel of 5x5 this time, bigger kernel -> bigger blurrier of output image
+  NppiMaskSize e_mask_size(NPP_MASK_SIZE_5_X_5);            // We have to set the NppiMaskSize
   
-  //Apply the bilateral filter:
+  //Apply the bilateral filter: 
   NPP_CHECK_NPP(nppiFilterGauss_8u_C1R(
       o_device_src.data(), o_device_src.pitch(),
       o_device_dst.data(), o_device_dst.pitch(),
       o_size_ROI,
       e_mask_size));
 
-  
 }
 
+/*
+  @Brief Apply a Laplacian filter to a single-channel (grayscale) image on the device (GPU).
+*/
 void ApplyLaplaceFilter(const npp::ImageNPP_8u_C1 &o_device_src, npp::ImageNPP_8u_C1 &o_device_dst)
 {
+  // As in gaussian, we define the area (size) of interest, it's based on the width and heigh of source image
   NppiSize o_size_ROI = {(int)o_device_src.width(),(int)o_device_src.height()};
 
-  NppiSize o_src_size = {(int)o_device_src.width(), (int)o_device_src.height()};
-  NppiPoint o_src_offset = {0, 0};
+  NppiSize o_src_size = {(int)o_device_src.width(), (int)o_device_src.height()};    // Define the source image size
+  NppiPoint o_src_offset = {0, 0};                                                  // The pixel offset that pSrc points to relative to the origin of the source image. Set to 0 (entire image is used)
 
-  NppiSize o_mask = {5, 5};
-  NppiPoint o_anchor = {o_mask.width / 2, o_mask.height / 2};
-
-  NppiMaskSize e_mask_size(NPP_MASK_SIZE_5_X_5);
+  const int kMaskWidth = 5;
+  const int kMaskHeight = 5;
+  NppiSize o_mask = {kMaskWidth, kMaskHeight};                                      // Same as gaussian, the size of the filter (kernel size)
+  NppiMaskSize e_mask_size(NPP_MASK_SIZE_5_X_5);                                  
 
   //Apply the affine transformation
   NPP_CHECK_NPP(nppiFilterLaplaceBorder_8u_C1R(
@@ -121,7 +128,7 @@ void ApplyLaplaceFilter(const npp::ImageNPP_8u_C1 &o_device_src, npp::ImageNPP_8
     o_src_offset,
     o_device_dst.data(), o_device_dst.pitch(), 
     o_size_ROI, e_mask_size,
-    NPP_BORDER_REPLICATE
+    NPP_BORDER_REPLICATE                              // Border handling, replicates edge pixels during filtering
   ));
 
 }
@@ -141,6 +148,9 @@ int main(int argc, char *argv[])
   {
     getCmdLineArgumentString(argc, (const char **) argv, "input", &file_name);  //Gets the file name
     file_path = sdkFindFilePath(file_name, argv[0]);                            //Searches the file in our directories
+  }else{
+    fprintf(stderr, "Error: Not an \"-input\" has been specified\n");
+    exit(EXIT_FAILURE);
   }
   
   if (checkCmdLineFlag(argc, (const char **)argv, "-f"))
@@ -182,13 +192,14 @@ int main(int argc, char *argv[])
 
     
     // Copying result from device to host
-    npp::ImageCPU_8u_C1 o_host_dst(o_device_dst.size());
-    o_device_dst.copyTo(o_host_dst.data(), o_host_dst.pitch());     //Error here with gaussian filter
-  
-    // Save the output image
-    saveImage(s_result_filename, o_host_dst);
+    npp::ImageCPU_8u_C1 o_host_dst(o_device_dst.size());              // We create an image on the host with the same size as the device image
+    o_device_dst.copyTo(o_host_dst.data(), o_host_dst.pitch());       // Copy the from device(output) to host(output).
+
+    // Save the output image in a host path
+    saveImage(s_result_filename, o_host_dst); 
     fprintf(stdout, "Saved image: %s\n", s_result_filename.c_str());
 
+    //Free memory used
     nppiFree(o_device_dst.data());
     nppiFree(o_device_src.data());
 
