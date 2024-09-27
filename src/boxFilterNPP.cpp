@@ -48,6 +48,8 @@
 #include <helper_cuda.h>
 #include <helper_string.h>
 
+const char *kFilterTypeDefault = "gaussian";
+
 bool printfNPPinfo(int argc, char *argv[])
 {
   const NppLibraryVersion *libVer = nppGetLibVersion();
@@ -89,18 +91,20 @@ void ApplyGaussianFilter(const npp::ImageNPP_8u_C1 & o_device_src, npp::ImageNPP
 
   NppiSize o_mask = {5, 5};
   NppiMaskSize e_mask_size(NPP_MASK_SIZE_5_X_5);
-
+  
   //Apply the bilateral filter:
   NPP_CHECK_NPP(nppiFilterGauss_8u_C1R(
       o_device_src.data(), o_device_src.pitch(),
       o_device_dst.data(), o_device_dst.pitch(),
       o_size_ROI,
       e_mask_size));
+
+  
 }
 
 void ApplyLaplaceFilter(const npp::ImageNPP_8u_C1 &o_device_src, npp::ImageNPP_8u_C1 &o_device_dst)
 {
-  NppiSize o_size_ROI = {o_device_src.width(), o_device_src.height()};
+  NppiSize o_size_ROI = {(int)o_device_src.width(),(int)o_device_src.height()};
 
   NppiSize o_src_size = {(int)o_device_src.width(), (int)o_device_src.height()};
   NppiPoint o_src_offset = {0, 0};
@@ -126,48 +130,32 @@ int main(int argc, char *argv[])
 {
   printf("%s Starting...\n\n", argv[0]);
 
-  std::string s_filename = "Lena.pgm";
-  std::string s_result_filename = "./data/output/output_image.pgm";
-  std::string filter_type = "b";
+  std::string s_filename;
+  std::string s_result_filename = "./data/output_image.pgm";
+  char *filter_type;
+  char *file_name;
   char *file_path;
 
-
-  // Parse command line arguments
-  for (int i = 1; i < argc; ++i)
-  {
-    if (strcmp(argv[i], "-input") == 0 && i + 1 < argc)
-    {
-      s_filename = argv[++i];
-    }
-    else if (strcmp(argv[i], "-output") == 0 && i + 1 < argc)
-    {
-      s_result_filename = argv[++i];
-    }
-    else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc)
-    {
-      filter_type = argv[++i]; // Set filter type
-    }
-  }
-
+  //Parse command line arguments
   if (checkCmdLineFlag(argc, (const char **)argv, "input"))
   {
-    getCmdLineArgumentString(argc, (const char **)argv, "input", &file_path);
+    getCmdLineArgumentString(argc, (const char **) argv, "input", &file_name);  //Gets the file name
+    file_path = sdkFindFilePath(file_name, argv[0]);                            //Searches the file in our directories
   }
-  else
+  
+  if (checkCmdLineFlag(argc, (const char **)argv, "-f"))
   {
-    file_path = sdkFindFilePath("Lena.pgm", argv[0]);
+    getCmdLineArgumentString(argc, (const char **)argv, "-f", &filter_type);
+  }else{
+    filter_type = (char *)kFilterTypeDefault;
   }
 
-  if (file_path)
-  {
+  if(file_path)
     s_filename = file_path;
-  }
-  else
-  {
-    s_filename = "Lena.pgm";
-  }
+  
 
-  printf("%s\n", s_filename);
+  printf("Filename Value: %s\n", s_filename.c_str());
+  printf("Filter Type Value: %s\n", filter_type);
 
   try{
 
@@ -178,34 +166,33 @@ int main(int argc, char *argv[])
     npp::ImageNPP_8u_C1 o_device_src, o_device_dst;
 
     SetupImageProcessing(s_filename, o_host_src, o_device_src, o_device_dst);
+    
 
     //Apply depeding on what filter:
-    if(filter_type == "b"){
-
+    if( strcmp(filter_type, "gaussian") == 0){
       ApplyGaussianFilter(o_device_src, o_device_dst);
 
-    } else if (filter_type == "laplace"){
-      
+    } else if ( strcmp(filter_type, "laplace") == 0){
       ApplyLaplaceFilter(o_device_src, o_device_dst);
     
     }else{
-      fprintf(stderr, "Unknown filter type: %s\n", filter_type.c_str());
+      fprintf(stderr, "Unknown filter type: %s\n", filter_type);
       exit(EXIT_FAILURE);
     }
+
+    
+    // Copying result from device to host
+    npp::ImageCPU_8u_C1 o_host_dst(o_device_dst.size());
+    o_device_dst.copyTo(o_host_dst.data(), o_host_dst.pitch());     //Error here with gaussian filter
   
+    // Save the output image
+    saveImage(s_result_filename, o_host_dst);
+    fprintf(stdout, "Saved image: %s\n", s_result_filename.c_str());
 
-  // Copying result from device to host
-  npp::ImageCPU_8u_C1 o_host_dst(o_device_dst.size());
-  o_device_dst.copyTo(o_host_dst.data(), o_host_dst.pitch());
+    nppiFree(o_device_dst.data());
+    nppiFree(o_device_src.data());
 
-  // Save the output image
-  saveImage(s_result_filename, o_host_dst);
-  fprintf(stdout, "Saved image: %s\n", s_result_filename.c_str());
-
-  nppiFree(o_device_dst.data());
-  nppiFree(o_device_src.data());
-
-  exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
   }
   catch (npp::Exception &rException)
   {
