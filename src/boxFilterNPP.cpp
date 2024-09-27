@@ -107,6 +107,7 @@ void ApplyGaussianFilter(const npp::ImageNPP_8u_C1 & o_device_src, npp::ImageNPP
 
 /*
   @Brief Apply a Laplacian filter to a single-channel (grayscale) image on the device (GPU).
+  ( https://docs.nvidia.com/cuda/archive/9.2/npp/group__image__filter__laplace__border.html#ga84e42b19e775717ebd38e6578344f9c8 )
 */
 void ApplyLaplaceFilter(const npp::ImageNPP_8u_C1 &o_device_src, npp::ImageNPP_8u_C1 &o_device_dst)
 {
@@ -128,7 +129,7 @@ void ApplyLaplaceFilter(const npp::ImageNPP_8u_C1 &o_device_src, npp::ImageNPP_8
     o_src_offset,
     o_device_dst.data(), o_device_dst.pitch(), 
     o_size_ROI, e_mask_size,
-    NPP_BORDER_REPLICATE                              // Border handling, replicates edge pixels during filtering
+    NPP_BORDER_REPLICATE                                                            // Border handling, replicates edge pixels during filtering
   ));
 
 }
@@ -146,8 +147,8 @@ int main(int argc, char *argv[])
   //Parse command line arguments
   if (checkCmdLineFlag(argc, (const char **)argv, "input"))
   {
-    getCmdLineArgumentString(argc, (const char **) argv, "input", &file_name);  //Gets the file name
-    file_path = sdkFindFilePath(file_name, argv[0]);                            //Searches the file in our directories
+    getCmdLineArgumentString(argc, (const char **) argv, "input", &file_name);    //Gets the file name
+    file_path = sdkFindFilePath(file_name, argv[0]);                              //Searches the file in our directories
   }else{
     fprintf(stderr, "Error: Not an \"-input\" has been specified\n");
     exit(EXIT_FAILURE);
@@ -169,7 +170,7 @@ int main(int argc, char *argv[])
 
   try{
 
-    findCudaDevice(argc, (const char **)argv); // Initialize CUDA device
+    findCudaDevice(argc, (const char **)argv);     // Initialize CUDA device
 
     //Setup the image
     npp::ImageCPU_8u_C1 o_host_src;
