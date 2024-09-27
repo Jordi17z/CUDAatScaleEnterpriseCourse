@@ -87,7 +87,7 @@ void SetupImageProcessing(const std::string & s_filename, npp::ImageCPU_8u_C1 &o
 void ApplyGaussianFilter(const npp::ImageNPP_8u_C1 & o_device_src, npp::ImageNPP_8u_C1 & o_device_dst)
 {
 
-  NppiSize o_size_ROI = {static_cast<int>(o_device_src.width()), static_cast<int> (o_device_src.height())};
+  NppiSize o_size_ROI = {(int)(o_device_src.width()), (int)(o_device_src.height())};
 
   NppiSize o_mask = {5, 5};
   NppiMaskSize e_mask_size(NPP_MASK_SIZE_5_X_5);
